@@ -1,0 +1,27 @@
+# Environment files
+.env
+**/.env
+
+# Dependency folders
+node_modules/
+**/node_modules/
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+
+# OS / Editor junk
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Python (if backend is Python-based)
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Build output
+dist/
+build/
