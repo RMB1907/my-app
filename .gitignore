@@ -25,3 +25,7 @@ __pycache__/
 # Build output
 dist/
 build/
+
+# Git-related cleanup files
+my-app.git/
+my-app.git.bfg-report/
