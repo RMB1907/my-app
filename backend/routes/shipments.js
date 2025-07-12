@@ -1,29 +1,41 @@
 import express from 'express';
-import pool from '../db.js'; // use relative path
+import pool from '../db.js';
+import algosdk from 'algosdk';
 
-console.log('shipments.js loaded');
-console.log('DATABASE_URL from .env:', process.env.DATABASE_URL);
-
-console.log('shipments.js loaded');
 const router = express.Router();
 
-// Create new shipment
+// Generate blockchain address
+function generateBlockchainId() {
+  const account = algosdk.generateAccount();
+  return {
+    address: account.addr,
+    privateKey: account.sk,
+    mnemonic: algosdk.secretKeyToMnemonic(account.sk),
+  };
+}
+
+// Create new shipment (with blockchain ID)
 router.post('/', async (req, res) => {
-  const { product_name, origin, destination, status } = req.body;
+  const { product_name, origin, destination } = req.body;
 
   if (!product_name || !origin || !destination) {
     return res.status(400).json({ error: 'Missing required fields' });
   }
 
+  const blockchainInfo = generateBlockchainId();
+
   try {
     const result = await pool.query(
-      `INSERT INTO shipments (product_name, origin, destination, status)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO shipments (product_name, origin, destination, blockchain_id, status)
+       VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
-      [product_name, origin, destination, status || 'pending']
+      [product_name, origin, destination, blockchainInfo.address, 'pending']
     );
 
-    res.status(201).json(result.rows[0]);
+    res.status(201).json({
+      shipment: result.rows[0],
+      mnemonic: blockchainInfo.mnemonic // Show once or log securely
+    });
   } catch (err) {
     console.error('Error creating shipment:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -72,43 +84,18 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// Add new event to shipment
-router.post('/:id/events', async (req, res) => {
-  const shipmentId = req.params.id;
-  const { location, action } = req.body;
-
-  if (!location || !action) {
-    return res.status(400).json({ error: 'Location and action are required' });
-  }
-
-  try {
-    const result = await pool.query(
-      `INSERT INTO shipment_events (shipment_id, location, action)
-       VALUES ($1, $2, $3)
-       RETURNING *`,
-      [shipmentId, location, action]
-    );
-
-    res.status(201).json(result.rows[0]);
-  } catch (err) {
-    console.error('Error adding shipment event:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// Update shipment status
+// Update shipment
 router.put('/:id', async (req, res) => {
   const { id } = req.params;
-  const { status } = req.body;
-
-  if (!status) {
-    return res.status(400).json({ error: 'Status is required' });
-  }
+  const { product_name, origin, destination, status } = req.body;
 
   try {
     const result = await pool.query(
-      'UPDATE shipments SET status = $1 WHERE id = $2 RETURNING *',
-      [status, id]
+      `UPDATE shipments 
+       SET product_name = $1, origin = $2, destination = $3, status = $4
+       WHERE id = $5
+       RETURNING *`,
+      [product_name, origin, destination, status, id]
     );
 
     if (result.rows.length === 0) {
@@ -117,9 +104,28 @@ router.put('/:id', async (req, res) => {
 
     res.json(result.rows[0]);
   } catch (err) {
-    console.error('Error updating status:', err);
+    console.error('Error updating shipment:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+// Delete shipment (only one copy needed)
+router.delete('/:id', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await pool.query('DELETE FROM shipments WHERE id = $1 RETURNING *', [id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Shipment not found' });
+    }
+
+    res.json({ message: 'Shipment deleted successfully' });
+  } catch (err) {
+    console.error('Error deleting shipment:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 
 export default router;
