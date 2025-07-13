@@ -1,7 +1,6 @@
 import dotenv from 'dotenv';
 import path from 'path';
 import express from 'express';
-import pg from 'pg';
 import cors from 'cors';
 import shipmentsRouter from './routes/shipments.js';
 import pool from './db.js';
@@ -11,7 +10,6 @@ dotenv.config({ path: path.resolve('./.env') });
 if (!process.env.DATABASE_URL) {
   console.warn('⚠️ DATABASE_URL not loaded from .env');
 }
-
 // Express app
 const app = express();
 app.use(cors({

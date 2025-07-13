@@ -45,7 +45,7 @@ router.post('/', async (req, res) => {
 // Get all shipments
 router.get('/', async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM shipments ORDER BY id');
+    const result = await pool.query('SELECT * FROM shipments ORDER BY id DESC');
     res.json(result.rows);
   } catch (err) {
     res.status(500).send(err.message);
@@ -70,7 +70,7 @@ router.get('/:id', async (req, res) => {
       `SELECT location, action, event_time 
        FROM shipment_events 
        WHERE shipment_id = $1 
-       ORDER BY event_time ASC`,
+       ORDER BY event_time DESC`,
       [shipmentId]
     );
 
