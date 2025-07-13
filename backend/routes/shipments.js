@@ -52,6 +52,19 @@ router.get('/', async (req, res) => {
   }
 });
 
+// GET /shipments/assignments
+router.get('/assignments', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT * FROM shipment_assignments ORDER BY created_at DESC`
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error fetching assignments:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Get shipment by ID + events
 router.get('/:id', async (req, res) => {
   const shipmentId = req.params.id;
@@ -87,20 +100,29 @@ router.get('/:id', async (req, res) => {
 // Update shipment
 router.put('/:id', async (req, res) => {
   const { id } = req.params;
-  const { product_name, origin, destination, status } = req.body;
+  const { product_name, origin, destination } = req.body;
 
   try {
+    // Step 1: Get existing status
+    const existing = await pool.query(
+      `SELECT status FROM shipments WHERE id = $1`,
+      [id]
+    );
+
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ error: 'Shipment not found' });
+    }
+
+    const existingStatus = existing.rows[0].status;
+
+    // Step 2: Update while preserving status
     const result = await pool.query(
       `UPDATE shipments 
        SET product_name = $1, origin = $2, destination = $3, status = $4
        WHERE id = $5
        RETURNING *`,
-      [product_name, origin, destination, status, id]
+      [product_name, origin, destination, existingStatus, id]
     );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Shipment not found' });
-    }
 
     res.json(result.rows[0]);
   } catch (err) {
@@ -108,6 +130,7 @@ router.put('/:id', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
 
 // Delete shipment (only one copy needed)
 router.delete('/:id', async (req, res) => {
@@ -126,6 +149,36 @@ router.delete('/:id', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+router.post('/:id/assign', async (req, res) => {
+  const { id: shipment_id } = req.params;
+  const { agent_wallet_id, customer_wallet_id, blockchain_id } = req.body;
+
+  if (!agent_wallet_id || !customer_wallet_id || !blockchain_id) {
+    return res.status(400).json({ error: 'All fields are required.' });
+  }
+
+  try {
+    const result = await pool.query(
+      `INSERT INTO shipment_assignments (shipment_id, blockchain_id, agent_wallet_id, customer_wallet_id)
+       VALUES ($1, $2, $3, $4)
+       RETURNING *`,
+      [shipment_id, blockchain_id, agent_wallet_id, customer_wallet_id]
+    );
+
+    // Optionally update shipment status
+    await pool.query(
+      `UPDATE shipments SET status = 'in_progress' WHERE id = $1`,
+      [shipment_id]
+    );
+
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error('Error assigning shipment:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 
 
 export default router;

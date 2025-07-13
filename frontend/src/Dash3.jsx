@@ -18,6 +18,43 @@ const Dashboard = () => {
   const [destination, setDestination] = useState('');
   const [editShipment, setEditShipment] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [assignShipment, setAssignShipment] = useState(null);
+  const [agentWalletId, setAgentWalletId] = useState('');
+  const [customerWalletId, setCustomerWalletId] = useState('');
+
+  const handleAssign = (shipmentId) => {
+    const shipment = shipments.find((s) => s.id === shipmentId);
+    if (shipment) {
+      setAssignShipment(shipment);
+      setAgentWalletId('');
+      setCustomerWalletId('');
+      setShowAssignModal(true);
+    }
+  };
+const handleAssignSave = () => {
+  if (!agentWalletId || !customerWalletId) {
+    alert("Please enter both wallet IDs.");
+    return;
+  }
+
+  axios.post(`http://localhost:3001/shipments/${assignShipment.id}/assign`, {
+    agent_wallet_id: agentWalletId,
+    customer_wallet_id: customerWalletId,
+    blockchain_id: assignShipment.blockchain_id, // Ensure this exists in your shipment object
+  })
+    .then(() => axios.get('http://localhost:3001/shipments'))
+    .then((res) => {
+      setShipments(res.data);
+      setShowAssignModal(false);
+      setAssignShipment(null);
+    })
+    .catch((err) => {
+      console.error('Error assigning shipment:', err.response?.data || err);
+      alert('Failed to assign shipment.');
+    });
+};
+
 
   // Fetch shipments on load
   useEffect(() => {
@@ -57,19 +94,28 @@ const Dashboard = () => {
 
   // Save changes from modal
   const handleUpdate = () => {
-    axios
-      .put(`http://localhost:3001/shipments/${editShipment.id}`, {
-        product_name: editShipment.product_name,
-        origin: editShipment.origin,
-        destination: editShipment.destination,
-      })
-      .then(() => axios.get('http://localhost:3001/shipments'))
-      .then((res) => {
-        setShipments(res.data);
-        setShowModal(false);
-      })
-      .catch((err) => console.error('Error updating shipment:', err));
-  };
+  if (!editShipment) return;
+
+  axios
+    .put(`http://localhost:3001/shipments/${editShipment.id}`, {
+      product_name: editShipment.product_name,
+      origin: editShipment.origin,
+      destination: editShipment.destination,
+    })
+    .then(() => {
+      return axios.get('http://localhost:3001/shipments');
+    })
+    .then((res) => {
+      setShipments(res.data);
+      setEditShipment(null);  // clear after update
+      setShowModal(false);    // close modal
+    })
+    .catch((err) => {
+      console.error('Error updating shipment:', err);
+      alert('Failed to update shipment.');
+    });
+};
+
 
   // Delete shipment
   const handleDelete = (id) => {
@@ -148,7 +194,9 @@ const Dashboard = () => {
             <th>Source</th>
             <th>Destination</th>
             <th>Timestamp</th>
+            <th>Status</th>
             <th>Actions</th>
+            <th>Assign</th>
           </tr>
         </thead>
         <tbody>
@@ -159,6 +207,7 @@ const Dashboard = () => {
               <td>{shipment.origin}</td>
               <td>{shipment.destination}</td>
               <td>{new Date(shipment.timestamp).toLocaleString()}</td>
+              <td>{shipment.status}</td>
               <td>
                 <Button
                   variant="primary"
@@ -174,6 +223,15 @@ const Dashboard = () => {
                   onClick={() => handleDelete(shipment.id)}
                 >
                   Delete
+                </Button>
+              </td>
+              <td>
+                <Button
+                  variant="info"
+                  size="sm"
+                  onClick={() => handleAssign(shipment.id)}
+                >
+                  Assign
                 </Button>
               </td>
             </tr>
@@ -240,6 +298,39 @@ const Dashboard = () => {
           </Button>
         </Modal.Footer>
       </Modal>
+      <Modal show={showAssignModal} onHide={() => setShowAssignModal(false)}>
+  <Modal.Header closeButton>
+    <Modal.Title>Assign Shipment #{assignShipment?.id}</Modal.Title>
+  </Modal.Header>
+  <Modal.Body>
+    <Form>
+      <Form.Group className="mb-3">
+        <Form.Label>Delivery Agent Wallet ID</Form.Label>
+        <Form.Control
+          type="text"
+          value={agentWalletId}
+          onChange={(e) => setAgentWalletId(e.target.value)}
+        />
+      </Form.Group>
+      <Form.Group className="mb-3">
+        <Form.Label>Customer Wallet ID</Form.Label>
+        <Form.Control
+          type="text"
+          value={customerWalletId}
+          onChange={(e) => setCustomerWalletId(e.target.value)}
+        />
+      </Form.Group>
+    </Form>
+  </Modal.Body>
+  <Modal.Footer>
+    <Button variant="secondary" onClick={() => setShowAssignModal(false)}>
+      Cancel
+    </Button>
+    <Button variant="primary" onClick={handleAssignSave}>
+      Assign
+    </Button>
+  </Modal.Footer>
+</Modal>
     </Container>
   );
 };
