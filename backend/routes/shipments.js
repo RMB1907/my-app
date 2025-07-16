@@ -22,19 +22,19 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ error: 'Missing required fields' });
   }
 
-  const blockchainInfo = generateBlockchainId();
+  const { address, mnemonic } = generateBlockchainId(); // clean and safe
 
   try {
     const result = await pool.query(
       `INSERT INTO shipments (product_name, origin, destination, blockchain_id, status)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
-      [product_name, origin, destination, blockchainInfo.address, 'pending']
+      [product_name, origin, destination, address, 'pending']
     );
 
     res.status(201).json({
       shipment: result.rows[0],
-      mnemonic: blockchainInfo.mnemonic // Show once or log securely
+      mnemonic, // remember: never store this in DB
     });
   } catch (err) {
     console.error('Error creating shipment:', err);
